@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PointsTracker Pro</title>
+    <title>PointsTracker Pro + Search</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 font-sans min-h-screen pb-12">
@@ -37,12 +37,25 @@
             <p class="text-xs text-gray-500 mt-2 text-right"><span id="totalUsed">0</span> points used</p>
         </div>
 
-        <!-- Add Item Form -->
+        <!-- SEARCH FOOD DATABASE -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100 relative">
+            <h2 class="text-sm font-bold text-gray-800 mb-3">Search Food Database</h2>
+            <div class="relative">
+                <input type="text" id="dbSearch" oninput="filterDatabase()" placeholder="Type to search (e.g., Pizza, Banana, Eggs...)" class="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                
+                <!-- Search Results Dropdown -->
+                <div id="searchResults" class="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto hidden z-50 divide-y divide-gray-50">
+                    <!-- Dynamic results match here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Manual Add Item Form -->
         <div class="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100">
-            <h2 class="text-sm font-bold text-gray-800 mb-3">Log Food or Drink</h2>
-            <form id="foodForm" onsubmit="logItem(event)" class="space-y-3">
+            <h2 class="text-sm font-bold text-gray-800 mb-3">Custom / Manual Log</h2>
+            <form id="foodForm" onsubmit="logManualItem(event)" class="space-y-3">
                 <div>
-                    <input type="text" id="foodName" placeholder="Food description (e.g., Oatmeal)" required class="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <input type="text" id="foodName" placeholder="Food description (e.g., Homemade Soup)" required class="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                 </div>
                 <div class="flex gap-3">
                     <input type="number" id="foodPoints" placeholder="Points" min="0" required class="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
@@ -55,19 +68,50 @@
         <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
             <h2 class="text-sm font-bold text-gray-800 mb-3">Today's Log</h2>
             <div id="logList" class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                <!-- Dynamic items go here -->
                 <p id="emptyMessage" class="text-sm text-gray-400 text-center py-4">No items logged yet today.</p>
             </div>
         </div>
     </main>
 
     <script>
+        // Built-in Food Dictionary (WeightWatchers estimation baseline)
+        const FOOD_DATABASE = [
+            { name: "Apple", points: 0 },
+            { name: "Banana", points: 0 },
+            { name: "Egg (1 large)", points: 0 },
+            { name: "Chicken Breast (Grilled, 3oz)", points: 0 },
+            { name: "Salmon Fillet (3oz)", points: 0 },
+            { name: "Avocado (1/4 medium)", points: 2 },
+            { name: "Greek Yogurt (Nonfat, 1 cup)", points: 0 },
+            { name: "Oatmeal (Cooked, 1 cup)", points: 3 },
+            { name: "Brown Rice (Cooked, 1 cup)", points: 6 },
+            { name: "White Rice (Cooked, 1 cup)", points: 6 },
+            { name: "Pizza (Cheese, 1 slice)", points: 7 },
+            { name: "Pizza (Pepperoni, 1 slice)", points: 9 },
+            { name: "Coffee (Black)", points: 0 },
+            { name: "Latte (Whole milk, small)", points: 5 },
+            { name: "Latte (Skim milk, small)", points: 2 },
+            { name: "Potato Chips (1 oz bag)", points: 4 },
+            { name: "Chocolate Chip Cookie (1 medium)", points: 4 },
+            { name: "Cheddar Cheese (1 oz)", points: 4 },
+            { name: "Mixed Green Salad (No dressing)", points: 0 },
+            { name: "Salad Dressing (Ranch, 2 tbsp)", points: 5 },
+            { name: "Salad Dressing (Vinaigrette, 2 tbsp)", points: 3 },
+            { name: "Bread (White, 1 slice)", points: 2 },
+            { name: "Bread (Whole Wheat, 1 slice)", points: 2 },
+            { name: "Skim Milk (1 cup)", points: 3 },
+            { name: "Whole Milk (1 cup)", points: 5 },
+            { name: "Diet Soda", points: 0 },
+            { name: "Regular Soda (12oz can)", points: 10 },
+            { name: "Beer (12oz regular)", points: 5 },
+            { name: "Wine (5oz glass)", points: 4 }
+        ];
+
         let state = {
             budget: 30,
             items: []
         };
 
-        // Load data from LocalStorage on startup
         window.onload = function() {
             const savedState = localStorage.getItem('pointsTrackerState');
             if (savedState) {
@@ -75,6 +119,13 @@
                 document.getElementById('dailyBudget').value = state.budget;
             }
             render();
+            
+            // Close search dropdown if clicking outside
+            document.addEventListener('click', function(e) {
+                if (e.target.id !== 'dbSearch') {
+                    document.getElementById('searchResults').classList.add('hidden');
+                }
+            });
         };
 
         function saveState() {
@@ -88,7 +139,43 @@
             render();
         }
 
-        function logItem(e) {
+        // Live filtering mechanism
+        function filterDatabase() {
+            const query = document.getElementById('dbSearch').value.toLowerCase().trim();
+            const resultsDiv = document.getElementById('searchResults');
+            
+            if (!query) {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+
+            const matches = FOOD_DATABASE.filter(food => 
+                food.name.toLowerCase().includes(query)
+            );
+
+            if (matches.length === 0) {
+                resultsDiv.innerHTML = `<div class="p-3 text-sm text-gray-400 italic">No matches found. Use custom form below!</div>`;
+            } else {
+                resultsDiv.innerHTML = matches.map(food => `
+                    <div onclick="logDbItem('${food.name}', ${food.points})" class="p-3 text-sm hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition">
+                        <span class="font-medium text-gray-700">${food.name}</span>
+                        <span class="bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded text-xs">${food.points} pts</span>
+                    </div>
+                `).join('');
+            }
+            resultsDiv.classList.remove('hidden');
+        }
+
+        function logDbItem(name, points) {
+            const newItem = { id: Date.now(), name: name, points: points };
+            state.items.push(newItem);
+            document.getElementById('dbSearch').value = '';
+            document.getElementById('searchResults').classList.add('hidden');
+            saveState();
+            render();
+        }
+
+        function logManualItem(e) {
             e.preventDefault();
             const nameInput = document.getElementById('foodName');
             const pointsInput = document.getElementById('foodPoints');
@@ -128,28 +215,22 @@
             const totalUsedSpan = document.getElementById('totalUsed');
             const progressBar = document.getElementById('progressBar');
 
-            // Calculate totals
             const totalUsed = state.items.reduce((sum, item) => sum + item.points, 0);
             const remaining = state.budget - totalUsed;
 
-            // Update Header Numbers
             remainingPoints.innerText = remaining;
             totalUsedSpan.innerText = totalUsed;
 
-            // Handle Over-budget color styling
             if (remaining < 0) {
                 remainingPoints.className = "text-3xl font-extrabold text-red-600";
             } else {
                 remainingPoints.className = "text-3xl font-extrabold text-indigo-600";
             }
 
-            // Update Progress Bar
             const percent = state.budget > 0 ? Math.min((totalUsed / state.budget) * 100, 100) : 100;
             progressBar.style.width = `${percent}%`;
             progressBar.className = remaining < 0 ? "bg-red-500 h-2.5 rounded-full transition-all duration-300" : "bg-indigo-600 h-2.5 rounded-full transition-all duration-300";
 
-            // Render List Items
-            // Clear existing items except empty message placeholder
             logList.innerHTML = '';
             
             if (state.items.length === 0) {
@@ -158,7 +239,7 @@
             } else {
                 state.items.forEach(item => {
                     const div = document.createElement('div');
-                    div.className = "flex justify-between items-center py-3 text-sm animate-fade-in";
+                    div.className = "flex justify-between items-center py-3 text-sm";
                     div.innerHTML = `
                         <div>
                             <p class="font-medium text-gray-800">${item.name}</p>
