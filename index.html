@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PointsTracker Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 font-sans min-h-screen pb-12">
+
+    <!-- Navbar -->
+    <nav class="bg-indigo-600 text-white shadow-md p-4 mb-6">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold tracking-tight">PointsTracker Pro</h1>
+            <button onclick="resetDay()" class="bg-indigo-700 hover:bg-indigo-800 px-3 py-1 rounded text-sm font-medium transition">Reset Day</button>
+        </div>
+    </nav>
+
+    <main class="max-w-md mx-auto px-4">
+        <!-- Budget Setup & Progress Card -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Daily Target</label>
+                    <input type="number" id="dailyBudget" value="30" onchange="updateBudget()" class="w-16 text-xl font-bold text-gray-800 border-b-2 border-indigo-500 focus:outline-none">
+                </div>
+                <div class="text-right">
+                    <span class="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Remaining</span>
+                    <span id="remainingPoints" class="text-3xl font-extrabold text-indigo-600">30</span>
+                </div>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div id="progressBar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p class="text-xs text-gray-500 mt-2 text-right"><span id="totalUsed">0</span> points used</p>
+        </div>
+
+        <!-- Add Item Form -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100">
+            <h2 class="text-sm font-bold text-gray-800 mb-3">Log Food or Drink</h2>
+            <form id="foodForm" onsubmit="logItem(event)" class="space-y-3">
+                <div>
+                    <input type="text" id="foodName" placeholder="Food description (e.g., Oatmeal)" required class="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div class="flex gap-3">
+                    <input type="number" id="foodPoints" placeholder="Points" min="0" required class="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm py-2.5 px-4 rounded-lg transition shadow-sm">Add Item</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Food Log History -->
+        <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+            <h2 class="text-sm font-bold text-gray-800 mb-3">Today's Log</h2>
+            <div id="logList" class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                <!-- Dynamic items go here -->
+                <p id="emptyMessage" class="text-sm text-gray-400 text-center py-4">No items logged yet today.</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let state = {
+            budget: 30,
+            items: []
+        };
+
+        // Load data from LocalStorage on startup
+        window.onload = function() {
+            const savedState = localStorage.getItem('pointsTrackerState');
+            if (savedState) {
+                state = JSON.parse(savedState);
+                document.getElementById('dailyBudget').value = state.budget;
+            }
+            render();
+        };
+
+        function saveState() {
+            localStorage.setItem('pointsTrackerState', JSON.stringify(state));
+        }
+
+        function updateBudget() {
+            const val = parseInt(document.getElementById('dailyBudget').value);
+            state.budget = isNaN(val) || val < 0 ? 0 : val;
+            saveState();
+            render();
+        }
+
+        function logItem(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('foodName');
+            const pointsInput = document.getElementById('foodPoints');
+            
+            const newItem = {
+                id: Date.now(),
+                name: nameInput.value,
+                points: parseInt(pointsInput.value)
+            };
+
+            state.items.push(newItem);
+            nameInput.value = '';
+            pointsInput.value = '';
+            
+            saveState();
+            render();
+        }
+
+        function deleteItem(id) {
+            state.items = state.items.filter(item => item.id !== id);
+            saveState();
+            render();
+        }
+
+        function resetDay() {
+            if(confirm("Are you sure you want to clear today's log?")) {
+                state.items = [];
+                saveState();
+                render();
+            }
+        }
+
+        function render() {
+            const logList = document.getElementById('logList');
+            const emptyMessage = document.getElementById('emptyMessage');
+            const remainingPoints = document.getElementById('remainingPoints');
+            const totalUsedSpan = document.getElementById('totalUsed');
+            const progressBar = document.getElementById('progressBar');
+
+            // Calculate totals
+            const totalUsed = state.items.reduce((sum, item) => sum + item.points, 0);
+            const remaining = state.budget - totalUsed;
+
+            // Update Header Numbers
+            remainingPoints.innerText = remaining;
+            totalUsedSpan.innerText = totalUsed;
+
+            // Handle Over-budget color styling
+            if (remaining < 0) {
+                remainingPoints.className = "text-3xl font-extrabold text-red-600";
+            } else {
+                remainingPoints.className = "text-3xl font-extrabold text-indigo-600";
+            }
+
+            // Update Progress Bar
+            const percent = state.budget > 0 ? Math.min((totalUsed / state.budget) * 100, 100) : 100;
+            progressBar.style.width = `${percent}%`;
+            progressBar.className = remaining < 0 ? "bg-red-500 h-2.5 rounded-full transition-all duration-300" : "bg-indigo-600 h-2.5 rounded-full transition-all duration-300";
+
+            // Render List Items
+            // Clear existing items except empty message placeholder
+            logList.innerHTML = '';
+            
+            if (state.items.length === 0) {
+                logList.appendChild(emptyMessage);
+                emptyMessage.classList.remove('hidden');
+            } else {
+                state.items.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center py-3 text-sm animate-fade-in";
+                    div.innerHTML = `
+                        <div>
+                            <p class="font-medium text-gray-800">${item.name}</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="font-semibold text-gray-700 bg-gray-100 px-2.5 py-0.5 rounded-full text-xs">${item.points} pts</span>
+                            <button onclick="deleteItem(${item.id})" class="text-gray-400 hover:text-red-500 font-medium text-xs transition">Delete</button>
+                        </div>
+                    `;
+                    logList.appendChild(div);
+                });
+            }
+        }
+    </script>
+</body>
+</html>
