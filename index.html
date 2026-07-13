@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power & Growth Tracker v4 (Scanner)</title>
+    <!-- Include the free HTML5 Barcode Scanning Library -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-blue: #38bdf8;
+            --accent-orange: #fb923c;
+            --accent-purple: #c084fc;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+            border: 1px solid var(--border-color);
+        }
+
+        h1 { text-align: center; font-size: 26px; margin-bottom: 2px; }
+        p.subtitle { text-align: center; color: var(--accent-blue); margin-top: 0; font-size: 14px; font-weight: 600; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 1px; }
+
+        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; }
+        .metric-card { background: rgba(15, 23, 42, 0.4); padding: 15px; border-radius: 14px; border: 1px solid var(--border-color); }
+        .metric-card.full-width { grid-column: span 2; }
+        .metric-header { display: flex; justify-content: space-between; font-size: 12px; text-transform: uppercase; font-weight: bold; color: var(--text-muted); margin-bottom: 8px; }
+        .metric-numbers { font-size: 24px; font-weight: 800; margin-bottom: 10px; }
+        .calories .metric-numbers { color: var(--accent-orange); }
+        .protein .metric-numbers { color: var(--accent-blue); }
+        .fiber .metric-numbers { color: var(--accent-purple); }
+
+        .progress-bg { background: #334155; width: 100%; height: 8px; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; width: 0%; transition: width 0.4s ease-out; border-radius: 4px; }
+        .calories .progress-fill { background: var(--accent-orange); }
+        .protein .progress-fill { background: var(--accent-blue); }
+        .fiber .progress-fill { background: var(--accent-purple); }
+
+        .section-box { background: rgba(15, 23, 42, 0.3); border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+        .section-title { font-size: 13px; font-weight: bold; color: var(--accent-blue); margin-top: 0; margin-bottom: 10px; text-transform: uppercase; }
+
+        label { display: block; font-size: 12px; margin-bottom: 5px; color: var(--text-muted); font-weight: 600; }
+        input { width: 100%; padding: 10px; border-radius: 8px; background: #0f172a; color: white; border: 1px solid var(--border-color); box-sizing: border-box; font-size: 15px; }
+        input:focus { outline: 2px solid var(--accent-blue); }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+        
+        .btn-main { width: 100%; padding: 14px; background: var(--accent-blue); color: #0f172a; font-weight: 800; font-size: 16px; border: none; border-radius: 10px; cursor: pointer; margin-top: 5px; }
+        .btn-scan { width: 100%; padding: 12px; background: #a855f7; color: white; font-weight: bold; border: none; border-radius: 10px; cursor: pointer; margin-bottom: 15px; font-size: 14px; }
+        
+        /* Scanner Box UI */
+        #scanner-container { display: none; margin-bottom: 15px; background: #000; border-radius: 12px; overflow: hidden; border: 2px solid #a855f7; }
+        #reader { width: 100%; }
+
+        .log-section { margin-top: 25px; }
+        .log-section h3 { border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px; font-size: 15px; color: var(--text-muted); }
+        .log-list { list-style: none; padding: 0; margin: 0; max-height: 180px; overflow-y: auto; }
+        .log-item { background: rgba(255,255,255,0.01); padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; border: 1px solid rgba(255,255,255,0.04); border-left: 4px solid var(--accent-blue); }
+        .log-stats { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+        
+        .btn-reset { background: none; color: #ef4444; border: 1px solid #ef4444; width: 100%; padding: 10px; border-radius: 10px; font-weight: bold; margin-top: 25px; cursor: pointer; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>PowerTracker v4</h1>
+    <p class="subtitle">Barcode Scanner Edition</p>
+
+    <!-- Dashboard -->
+    <div class="dashboard">
+        <div class="metric-card full-width calories">
+            <div class="metric-header"><span>Calories Target</span><span id="cal-pct">0%</span></div>
+            <div class="metric-numbers"><span id="cal-curr">0</span><span style="font-size:14px;color:var(--text-muted)"> / 2000 kcal</span></div>
+            <div class="progress-bg"><div id="cal-bar" class="progress-fill"></div></div>
+        </div>
+        <div class="metric-card protein">
+            <div class="metric-header"><span>Protein</span><span id="pro-pct">0%</span></div>
+            <div class="metric-numbers"><span id="pro-curr">0</span><span style="font-size:14px;color:var(--text-muted)"> / 130g</span></div>
+            <div class="progress-bg"><div id="pro-bar" class="progress-fill"></div></div>
+        </div>
+        <div class="metric-card fiber">
+            <div class="metric-header"><span>Fiber</span><span id="fib-pct">0%</span></div>
+            <div class="metric-numbers"><span id="fib-curr">0</span><span style="font-size:14px;color:var(--text-muted)"> / 32g</span></div>
+            <div class="progress-bg"><div id="fib-bar" class="progress-fill"></div></div>
+        </div>
+    </div>
+
+    <!-- SCANNER TRIGGER SYSTEM -->
+    <button class="btn-scan" id="scan-toggle-btn" onclick="toggleScanner()">📷 Open Barcode Camera</button>
+    <div id="scanner-container">
+        <div id="reader"></div>
+    </div>
+
+    <!-- Entry Form -->
+    <div class="form-group">
+        <label for="food-name">Food or Meal Name</label>
+        <input type="text" id="food-name" placeholder="e.g., Chicken Breast, Oats, Custom Meal">
+    </div>
+
+    <!-- GRAM & ML CALCULATOR BLOCK -->
+    <div class="section-box">
+        <div class="section-title">Step 1: Weight or Liquid Math (Optional)</div>
+        
+        <!-- Grams Section -->
+        <div class="grid-2" style="margin-bottom: 12px;">
+            <div>
+                <label for="weight-label">Label Serving (Grams)</label>
+                <input type="number" id="weight-label" placeholder="e.g., 100">
+            </div>
+            <div>
+                <label for="weight-eaten">What You Weighed (Grams)</label>
+                <input type="number" id="weight-eaten" placeholder="e.g., 150">
+            </div>
+        </div>
+
+        <!-- ML Section -->
+        <div class="grid-2">
+            <div>
+                <label for="ml-label">Label Serving (ml)</label>
+                <input type="number" id="ml-label" placeholder="e.g., 100">
+            </div>
+            <div>
+                <label for="ml-drank">What You Drank (ml)</label>
+                <input type="number" id="ml-drank" placeholder="e.g., 250">
+            </div>
+        </div>
+    </div>
+
+    <!-- BASE NUTRIENTS BLOCK -->
+    <div class="section-box">
+        <div class="section-title">Step 2: Base Nutrient Info</div>
+        <div class="grid-3">
+            <div>
+                <label for="food-cals">Calories</label>
+                <input type="number" id="food-cals" placeholder="0">
+            </div>
+            <div>
+                <label for="food-pro">Protein (g)</label>
+                <input type="number" id="food-pro" placeholder="0">
+            </div>
+            <div>
+                <label for="food-fib">Fiber (g)</label>
+                <input type="number" id="food-fib" placeholder="0">
+            </div>
+        </div>
+    </div>
+
+    <button class="btn-main" onclick="logFood()">Calculate & Log Item</button>
+
+    <div class="log-section">
+        <h3>Today's Food History Log</h3>
+        <ul id="log-list" class="log-list"></ul>
+    </div>
+
+    <button class="btn-reset" onclick="resetApp()">Reset Tracker for Tomorrow</button>
+</div>
+
+<script>
+    const GOALS = { calories: 2000, protein: 130, fiber: 32 };
+    let currentData = { calories: 0, protein: 0, fiber: 0, history: [] };
+    let html5QrcodeScanner = null;
+
+    if (localStorage.getItem('scannerRecompTracker')) {
+        currentData = JSON.parse(localStorage.getItem('scannerRecompTracker'));
+        updateDisplay();
+    }
+
+    function updateDisplay() {
+        document.getElementById('cal-curr').innerText = Math.round(currentData.calories);
+        document.getElementById('pro-curr').innerText = currentData.protein.toFixed(1);
+        document.getElementById('fib-curr').innerText = currentData.fiber.toFixed(1);
+
+        const calPct = Math.min(Math.round((currentData.calories / GOALS.calories) * 100), 150);
+        const proPct = Math.min(Math.round((currentData.protein / GOALS.protein) * 100), 150);
+        const fibPct = Math.min(Math.round((currentData.fiber / GOALS.fiber) * 100), 150);
+
+        document.getElementById('cal-pct').innerText = calPct + '%';
+        document.getElementById('pro-pct').innerText = proPct + '%';
+        document.getElementById('fib-pct').innerText = fibPct + '%';
+
+        document.getElementById('cal-bar').style.width = Math.min(calPct, 100) + '%';
+        document.getElementById('pro-bar').style.width = Math.min(proPct, 100) + '%';
+        document.getElementById('fib-bar').style.width = Math.min(fibPct, 100) + '%';
+
+        const list = document.getElementById('log-list');
+        list.innerHTML = '';
+        currentData.history.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'log-item';
+            li.innerHTML = `<div><strong>${item.name}</strong> ${item.note ? `<span style="color:var(--accent-blue);font-size:11px;">(${item.note})</span>` : ''}<div class="log-stats">${Math.round(item.cals)} kcal | ${item.pro.toFixed(1)}g Pro | ${item.fib.toFixed(1)}g Fib</div></div>`;
+            list.appendChild(li);
+        });
+
+        localStorage.setItem('scannerRecompTracker', JSON.stringify(currentData));
+    }
+
+    // BARCODE CAMERA ENGINE
+    function toggleScanner() {
+        const container = document.getElementById('scanner-container');
+        const btn = document.getElementById('scan-toggle-btn');
+        
+        if (container.style.display === 'block') {
+            stopScanner();
+        } else {
+            container.style.display = 'block';
+            btn.innerText = "🛑 Close Camera";
+            btn.style.backgroundColor = "#ef4444";
+            
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+                fps: 15, 
+                qrbox: { width: 250, height: 120 }, // Barcode shaped window
+                rememberLastUsedCamera: true,
+                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+            });
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+    }
+
+    function stopScanner() {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.clear().then(() => {
+                document.getElementById('scanner-container').style.display = 'none';
+                const btn = document.getElementById('scan-toggle-btn');
+                btn.innerText = "📷 Open Barcode Camera";
+                btn.style.backgroundColor = "#a855f7";
+            }).catch(err => console.error("Failed to clear scanner: ", err));
+        }
+    }
+
+    function onScanSuccess(decodedText) {
+        stopScanner();
+        // Beep feedback
+        alert("Barcode found! Searching database for code: " + decodedText);
+        
+        // Fetch data from the free Open Food Facts Internet API
+        fetch(`https://world.openfoodfacts.org/api/v2/product/${decodedText}.json`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 1 && data.product) {
+                    const prod = data.product;
+                    const nutriments = prod.nutriments;
+
+                    // Fill out name
+                    document.getElementById('food-name').value = prod.product_name || "Unknown Barcode Item";
+                    
+                    // Open Food Facts lists data per 100 units by default. We fill both 100 baselines.
+                    document.getElementById('weight-label').value = 100;
+                    document.getElementById('ml-label').value = 100;
+                    
+                    document.getElementById('food-cals').value = Math.round(nutriments['energy-kcal_100g'] || 0);
+                    document.getElementById('food-pro').value = parseFloat(nutriments['proteins_100g'] || 0).toFixed(1);
+                    document.getElementById('food-fib').value = parseFloat(nutriments['fiber_100g'] || 0).toFixed(1);
+                    
+                    alert("Food found and loaded successfully! Fill out either your Grams or ml eaten/drunk, then hit log.");
+                } else {
+                    alert("Barcode wasn't found in the public database. You can still type it manually!");
+                }
+            })
+            .catch(err => {
+                alert("Error searching the database. Check your internet connection.");
+                console.error(err);
+            });
+    }
+
+    function onScanFailure(error) {
+        // We leave this empty so it doesn't spam alerts while searching frames
+    }
+
+    function logFood() {
+        const nameIn = document.getElementById('food-name');
+        const wLabelIn = document.getElementById('weight-label');
+        const wEatenIn = document.getElementById('weight-eaten');
+        const mlLabelIn = document.getElementById('ml-label');
+        const mlDrankIn = document.getElementById('ml-drank');
+        const calIn = document.getElementById('food-cals');
+        const proIn = document.getElementById('food-pro');
+        const fibIn = document.getElementById('food-fib');
+
+        let name = nameIn.value.trim() || "Logged Item";
+        const wLabel = parseFloat(wLabelIn.value) || 0;
+        const wEaten = parseFloat(wEatenIn.value) || 0;
+        const mlLabel = parseFloat(mlLabelIn.value) || 0;
+        const mlDrank = parseFloat(mlDrankIn.value) || 0;
+        let cals = parseFloat(calIn.value) || 0;
+        let pro = parseFloat(proIn.value) || 0;
+        let fib = parseFloat(fibIn.value) || 0;
+
+        if (cals === 0 && pro === 0 && fib === 0 && nameIn.value.trim() === "") return;
+
+        let note = "";
+        // Prioritize Grams if filled, otherwise use ML calculation
+        if (wLabel > 0 && wEaten > 0) {
+            const scalingFactor = wEaten / wLabel;
+            cals *= scalingFactor;
+            pro *= scalingFactor;
+            fib *= scalingFactor;
+            note = `${wEaten}g`;
+        } else if (mlLabel > 0 && mlDrank > 0) {
+            const scalingFactor = mlDrank / mlLabel;
+            cals *= scalingFactor;
+            pro *= scalingFactor;
+            fib *= scalingFactor;
+            note = `${mlDrank}ml`;
+        }
+
+        currentData.calories += cals;
+        currentData.protein += pro;
+        currentData.fiber += fib;
+        currentData.history.unshift({ name, cals, pro, fib, note });
+
+        // Clear all inputs
+        nameIn.value = ''; 
+        wLabelIn.value = ''; wEatenIn.value = ''; 
+        mlLabelIn.value = ''; mlDrankIn.value = '';
+        calIn.value = ''; proIn.value = ''; fibIn.value = '';
+        updateDisplay();
+    }
+
+    function resetApp() {
+        if(confirm("Wipe logs out for a new day?")) {
+            currentData = { calories: 0, protein: 0, fiber: 0, history: [] };
+            updateDisplay();
+        }
+    }
+</script>
+
+</body>
+</html>
